@@ -1,0 +1,47 @@
+name: austin
+description: "Domain → Mount Bonnell corridor, Austin TX"
+
+crs: "EPSG:32614"
+
+bbox:
+  min_lon: -97.785
+  min_lat: 30.305
+  max_lon: -97.705
+  max_lat: 30.415
+
+origin:
+  name: "The Domain"
+  lon: -97.725
+  lat: 30.402
+
+destination:
+  name: "Mount Bonnell"
+  lon: -97.772
+  lat: 30.329
+
+dem:
+  resolution_m: 30
+  opentopography_demtype: "USGS30m"
+  building_height_m: 15.0
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+
+weights:
+  w_terrain: 1.0
+  w_risk: 1.0
+  w_distance: 1.0
+
+planning:
+  max_slope_deg: 25.0
+  min_clearance_m: 50.0
+  astar_subsample: 2
+  rrt_star:
+    max_iter: 3000
+    step_size_m: 80.0
+    goal_sample_rate: 0.1
+    neighbor_radius_m: 150.0
+
+validation:
+  infinite_cost: 1.0e9
