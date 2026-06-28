@@ -36,7 +36,7 @@ weights:
 planning:
   max_slope_deg: 25.0
   min_clearance_m: 50.0
-  astar_subsample: 2
+  astar_subsample: 1
   rrt_star:
     max_iter: 3000
     step_size_m: 80.0

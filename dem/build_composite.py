@@ -10,10 +10,9 @@ import numpy as np
 import rasterio
 from rasterio import features
 from rasterio.warp import calculate_default_transform, reproject, Resampling
-from rasterio.enums import Resampling as ResamplingEnum
 
 from region import load_config
-from dem.fetch_dem import dem_cache_path, fetch_dem
+from dem.fetch_dem import fetch_dem
 from dem.fetch_obstacles import fetch_obstacles
 
 
@@ -24,13 +23,18 @@ def build_composite(config_path: str | Path | None = None, force: bool = False) 
 
     composite_path = cfg.processed_dir / f"composite_dem_{cfg.name}.tif"
     obstacle_path = cfg.processed_dir / f"obstacle_mask_{cfg.name}.tif"
+    water_raster_path = cfg.processed_dir / f"water_mask_{cfg.name}.tif"
 
-    if composite_path.exists() and obstacle_path.exists() and not force:
+    if composite_path.exists() and obstacle_path.exists() and water_raster_path.exists() and not force:
         print(f"Using cached composite: {composite_path}")
-        return {"composite": composite_path, "obstacle_mask": obstacle_path}
+        return {
+            "composite": composite_path,
+            "obstacle_mask": obstacle_path,
+            "water_mask": water_raster_path,
+        }
 
     dem_path = fetch_dem(config_path, force=force)
-    buildings_path, water_path = fetch_obstacles(config_path, force=force)
+    buildings_path, water_geojson_path = fetch_obstacles(config_path, force=force)
 
     building_height = float(cfg.dem.get("building_height_m", 15.0))
 
@@ -66,7 +70,7 @@ def build_composite(config_path: str | Path | None = None, force: bool = False) 
 
     # Load and reproject vector layers
     buildings = gpd.read_file(buildings_path).to_crs(cfg.crs) if buildings_path.exists() else gpd.GeoDataFrame(columns=["geometry"], crs=cfg.crs)
-    water = gpd.read_file(water_path).to_crs(cfg.crs) if water_path.exists() else gpd.GeoDataFrame(columns=["geometry"], crs=cfg.crs)
+    water = gpd.read_file(water_geojson_path).to_crs(cfg.crs) if water_geojson_path.exists() else gpd.GeoDataFrame(columns=["geometry"], crs=cfg.crs)
 
     # Rasterize building footprints as height additions
     if not buildings.empty:
@@ -80,17 +84,22 @@ def build_composite(config_path: str | Path | None = None, force: bool = False) 
         )
         dem_data = dem_data + building_mask.astype(np.float32) * building_height
 
-    # Water obstacle mask (1 = impassable)
-    obstacle_mask = np.zeros(dem_data.shape, dtype=np.uint8)
+    # Water-only mask for no-fly validation
+    water_mask = np.zeros(dem_data.shape, dtype=np.uint8)
     if not water.empty:
         water_shapes = [(geom, 1) for geom in water.geometry if geom is not None and not geom.is_empty]
-        obstacle_mask = features.rasterize(
+        water_mask = features.rasterize(
             water_shapes,
             out_shape=dem_data.shape,
             transform=transform,
             fill=0,
             dtype=np.uint8,
         )
+        from scipy.ndimage import binary_dilation
+        water_mask = binary_dilation(water_mask, iterations=2).astype(np.uint8)
+
+    # Combined obstacle mask (water + buildings) for planning
+    obstacle_mask = water_mask.copy()
 
     # Also mark building footprints as hard obstacles at ground level
     if not buildings.empty:
@@ -124,9 +133,17 @@ def build_composite(config_path: str | Path | None = None, force: bool = False) 
     with rasterio.open(obstacle_path, "w", **profile) as dst:
         dst.write(obstacle_mask.astype(np.uint8), 1)
 
+    with rasterio.open(water_raster_path, "w", **profile) as dst:
+        dst.write(water_mask.astype(np.uint8), 1)
+
     print(f"Wrote composite DEM: {composite_path}")
     print(f"Wrote obstacle mask: {obstacle_path}")
-    return {"composite": composite_path, "obstacle_mask": obstacle_path}
+    print(f"Wrote water mask: {water_raster_path}")
+    return {
+        "composite": composite_path,
+        "obstacle_mask": obstacle_path,
+        "water_mask": water_raster_path,
+    }
 
 
 def plot_hillshade(config_path: str | Path | None = None, output: str | Path | None = None) -> Path:

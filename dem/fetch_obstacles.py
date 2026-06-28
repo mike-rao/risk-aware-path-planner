@@ -86,7 +86,7 @@ def fetch_obstacles(config_path: str | Path | None = None, force: bool = False) 
         resp = requests.post(
             OVERPASS_URL,
             data={"data": _overpass_query(cfg.bbox)},
-            timeout=180,
+            timeout=30,
             headers={"User-Agent": "risk-aware-path-planner/1.0"},
         )
         resp.raise_for_status()
