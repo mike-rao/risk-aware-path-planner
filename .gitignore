@@ -11,3 +11,4 @@ data/processed/*
 !data/processed/.gitkeep
 *.html
 outputs/
+TODO.md
