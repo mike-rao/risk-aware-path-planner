@@ -26,7 +26,9 @@ def make_map(config_path: str | Path | None = None, output: str | Path | None = 
     buildings_path, water_path = fetch_obstacles(config_path)
 
     center = [cfg.origin.lat, cfg.origin.lon]
-    m = folium.Map(location=center, zoom_start=12, tiles="OpenStreetMap")
+    # CartoDB tiles work when opening the HTML locally (file://); OSM's tile
+    # servers return 403 without a Referer header per their usage policy.
+    m = folium.Map(location=center, zoom_start=12, tiles="CartoDB positron")
 
     # Obstacle overlays (geometry only — OSM attrs break folium JSON)
     if water_path.exists():
